@@ -11,6 +11,9 @@
 
 # B3: Clone source from GIT
 1. Shell: "ssh-keygen" to see dir of .pub file
+```
+ssh-keygen
+```
 
 2. Shell: "cat /home/hieuthien95/.ssh/id_rsa.pub" to view public key
 
