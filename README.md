@@ -42,12 +42,11 @@ docker build -t gcr.io/${PROJECT_ID}/golang_health_image:v1 .
 
 or 
 
-1. Run script by batch.sh
+Run script by batch.sh
 ```
 chmod +x batch.sh
 ./batch.sh
 ```
-or
 
 2. Test image
 ```
@@ -59,7 +58,9 @@ curl localhost:9092/healthcheck
 
 # B5: Upload the image to a registry
 1. Auth
-```gcloud auth configure-docker```
+```
+gcloud auth configure-docker
+```
 
 2. Push this image to repo
 ```
