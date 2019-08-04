@@ -50,7 +50,7 @@ Go to: Kubernetes Engine > Workload > , click Deploy
 
 (https://console.cloud.google.com/kubernetes/workload/deploy)
 
-2. Shell: "kubectl expose deployment hello-web --type=LoadBalancer --port 80 --target-port 8080"
+2. Shell: "kubectl expose deployment health-check-web --type=LoadBalancer --port 80 --target-port 8080"
 
 Or
 
@@ -92,7 +92,8 @@ To check result
 
 "kubectl get service"
 
-"kubectl scale deployment hello-web --replicas=3"
+"kubectl scale deployment health-check-web --replicas=3"
+"kubectl set image deployment/health-check-web health-check-web=$IMG_NAME"
 
 ...
 
