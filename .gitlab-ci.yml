@@ -1,0 +1,65 @@
+stages:
+  - build
+  - docker-stg
+  - deploy-stg
+  
+variables:
+  REGISTRY_HOST: gcr.io
+  KUBE_DEPLOYMENT: $CI_PROJECT_NAME
+  KUBE_CONTAINER: $CI_PROJECT_NAME-sha256
+  KUBE_ZONE: asia-south1-a
+  NAMESPACE: $GCP_PROJECT_NAME-$CI_COMMIT_REF_NAME
+
+before_script:
+  - echo "GCP_ProjectID $GCP_PROJECT_ID"
+  - echo "ProjectName   $CI_PROJECT_NAME"
+  - echo "Branch        $CI_COMMIT_REF_NAME"
+  - echo "Commit        $CI_COMMIT_SHA"
+  - echo "Release image $DEPLOY_TARGET"
+  
+# this stage will pack whole project into docker (require Dockerfile)
+build:
+  stage: build
+  image: node:latest
+  services:
+    - docker:dind
+  script:
+    - npm i -g yarn
+    - yarn install
+    - yarn build
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - dist
+      
+docker-stg:
+  stage: docker-stg
+  allow_failure: false
+  image: docker:18.09.8
+  services:
+    - docker:18.09.8-dind
+  before_script:
+    - echo $GCLOUD_SA_JSON > ${HOME}/key.json
+    - docker login -u _json_key --password-stdin https://gcr.io < ${HOME}/key.json
+  script:
+    - export REF_NAME="$(echo "${CI_COMMIT_REF_NAME}-$CI_COMMIT_SHA" | tr A-Z a-z)"
+    - export IMG_NAME="$(echo "gcr.io/iconic-era-243808/golang_health_image:$REF_NAME")"
+    - docker build -t $IMG_NAME .
+    - docker images
+    - docker push $IMG_NAME
+    - docker rmi $IMG_NAME
+    - docker images
+  after_script:
+    - docker logout gcr.io
+
+deploy-stg:
+  stage: deploy-stg
+  allow_failure: false
+  image: google/cloud-sdk:latest
+  script:
+    - echo $GCLOUD_SA_JSON > ${HOME}/key.json
+    - gcloud auth activate-service-account --key-file ${HOME}/key.json
+    - gcloud container clusters get-credentials standard-cluster-1 --zone asia-southeast1 --project iconic-era-243808
+    - export REF_NAME="$(echo "${CI_COMMIT_REF_NAME}-$CI_COMMIT_SHA" | tr A-Z a-z)"
+    - export IMG_NAME="$(echo "gcr.io/iconic-era-243808/golang_health_image:$REF_NAME")"
+    - kubectl set image deployment/health-check-web health-check-web=$IMG_NAME
