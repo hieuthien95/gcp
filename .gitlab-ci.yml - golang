@@ -1,0 +1,80 @@
+image: golang:1.11.4
+
+stages:
+  - setup
+#   - test
+  - docker-stg
+  - deploy-stg
+  
+variables:
+  PROJECT: jc93
+  COMMIT_SHA: $CI_COMMIT_SHA
+  
+  
+.prep_go: &prep_go
+  before_script:
+    - export GL_URL=$(echo $CI_PROJECT_URL | awk -F/ '{print $3}')
+    - export GO_PROJECT_PATH="$GOPATH/src/$GL_URL/$CI_PROJECT_NAMESPACE"
+    - mkdir -p $GO_PROJECT_PATH
+    - ln -s $(pwd) $GO_PROJECT_PATH
+    - export GO_PROJECT_PATH="$GO_PROJECT_PATH/$CI_PROJECT_NAME"
+    - cd $GO_PROJECT_PATH
+    # - go get github.com/tools/godep
+    
+build:
+  <<: *prep_go
+  stage: setup
+  script:
+    # - echo 1
+    # - godep go build
+    # - go mod vendor
+    - go build
+
+
+# gometa:
+#   <<: *prep_go
+#   stage: test
+#   script:
+#     - go vet -composites=false $(go list ./... | grep -v /vendor/)
+#     - go fmt $(go list ./... | grep -v /vendor/)
+  
+# gotest:
+#   <<: *prep_go
+#   stage: test
+#   allow_failure: false
+#   script:
+#     - go test -race -v $( go list ./... | grep -v '/vendor/' | grep -v '/scripts/' | grep -v '/gs/' )
+    
+    
+docker-stg:
+  stage: docker-stg
+  allow_failure: false
+  image: docker:18.09.8
+  services:
+    - docker:18.09.8-dind
+  before_script:
+    - echo $GCLOUD_SA_JSON > ${HOME}/key.json
+    - docker login -u _json_key --password-stdin https://gcr.io < ${HOME}/key.json
+  script:
+    - export REF_NAME="$(echo "${CI_COMMIT_REF_NAME}-$CI_COMMIT_SHA" | tr A-Z a-z)"
+    - export IMG_NAME="$(echo "gcr.io/iconic-era-243808/golang_health_image:$REF_NAME")"
+    - docker build -t $IMG_NAME .
+    - docker images
+    - docker push $IMG_NAME
+    - docker rmi $IMG_NAME
+    - docker images
+  after_script:
+    - docker logout gcr.io
+    
+    
+deploy-stg:
+  stage: deploy-stg
+  allow_failure: false
+  image: google/cloud-sdk:latest
+  script:
+    - echo $GCLOUD_SA_JSON > ${HOME}/key.json
+    - gcloud auth activate-service-account --key-file ${HOME}/key.json
+    - gcloud container clusters get-credentials standard-cluster-1 --zone asia-southeast1 --project iconic-era-243808
+    - export REF_NAME="$(echo "${CI_COMMIT_REF_NAME}-$CI_COMMIT_SHA" | tr A-Z a-z)"
+    - export IMG_NAME="$(echo "gcr.io/iconic-era-243808/golang_health_image:$REF_NAME")"
+    - kubectl set image deployment/health-check-web health-check-web=$IMG_NAME
